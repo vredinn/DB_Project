@@ -67,6 +67,15 @@ def program():
         case "5":
             with sqlite3.connect("t1.db") as conn:
                 cursor = conn.cursor()
+                print("Выберите товар для удаления:")
+                cursor.execute(
+                    "SELECT p.id, p.name, p.price, c.name FROM products AS p JOIN categories AS c ON p.category_id = c.id"
+                )
+                products = cursor.fetchall()
+                for product in products:
+                    print(
+                        f"ID: {product[0]} Название товара: {product[1]}, Стоимость: {product[2]}, Категория: {product[3]}"
+                    )
                 id = int(input("Введите id товара: "))
                 cursor.execute("DELETE FROM products WHERE id = :id", {"id": id})
                 conn.commit()
