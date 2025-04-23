@@ -1,91 +1,120 @@
-import sqlite3
+from models import *
+from peewee import *
 
 
-def program():
-
-    match input(
-        "Выберите действие:\n1. вывести все товары\n2. вывести список доступных категорий\n3. добавить товар\n4. добавить категорию\n5. удалить товар\n0. выйти\n"
-    ):
-        case "1":
-            with sqlite3.connect("t1.db") as conn:
-                cursor = conn.cursor()
-
-                cursor.execute(
-                    "SELECT p.id, p.name, p.price, c.name FROM products AS p JOIN categories AS c ON p.category_id = c.id"
-                )
-                products = cursor.fetchall()
-                for product in products:
-                    print(
-                        f"Название товара: {product[1]}, Стоимость: {product[2]}, Категория: {product[3]}"
-                    )
-            program()
-        case "2":
-            with sqlite3.connect("t1.db") as conn:
-                cursor = conn.cursor()
-            cursor.execute("SELECT * FROM categories")
-            categories = cursor.fetchall()
-            for category in categories:
-                print(f"Категория: {category[1]}")
-            program()
-        case "3":
-            with sqlite3.connect("t1.db") as conn:
-                cursor = conn.cursor()
-                print("Выберите категорию товара:")
-                cursor.execute("SELECT * FROM categories")
-                categories = cursor.fetchall()
-                for category in categories:
-                    print(f"{category[0]}. {category[1]}")
-
-                category_id = int(input())
-
-                name = input("Введите название товара: ")
-
-                price = float(input("Введите цену товара: "))
-
-                cursor.execute(
-                    "INSERT INTO products (name, price, category_id) VALUES (:name, :price, :category_id)",
-                    {"name": name, "price": price, "category_id": category_id},
-                )
-
-                conn.commit()
-
-            print("Товар добавлен.")
-            program()
-        case "4":
-            with sqlite3.connect("t1.db") as conn:
-                cursor = conn.cursor()
-                name = input("Введите название Категории: ")
-
-                cursor.execute(
-                    "INSERT INTO categories (name) VALUES (:name)",
-                    {"name": name},
-                )
-
-                conn.commit()
-            print("Категория добавлена.")
-            program()
-        case "5":
-            with sqlite3.connect("t1.db") as conn:
-                cursor = conn.cursor()
-                print("Выберите товар для удаления:")
-                cursor.execute(
-                    "SELECT p.id, p.name, p.price, c.name FROM products AS p JOIN categories AS c ON p.category_id = c.id"
-                )
-                products = cursor.fetchall()
-                for product in products:
-                    print(
-                        f"ID: {product[0]} Название товара: {product[1]}, Стоимость: {product[2]}, Категория: {product[3]}"
-                    )
-                id = int(input("Введите id товара: "))
-                cursor.execute("DELETE FROM products WHERE id = :id", {"id": id})
-                conn.commit()
-            print("Товар удален.")
-            program()
-        case "0":
-            exit
-        case _:
-            print("Неверный выбор.")
-            program()
+def show_categories():
+    for c in Category.select():
+        print(f"{c.id}: {c.name}")
 
 
-program()
+def show_products():
+    for p in Product.select():
+        tags = [t.tag.name for t in p.tag_links]
+        print(
+            f"{p.id}: {p.name} ({p.category_id.name}) - {p.price} руб. | Теги: {', '.join(tags)}"
+        )
+
+
+def add_category():
+    name = input("Введите название категории: ")
+    Category.create(name=name)
+    print("Категория добавлена.")
+
+
+def add_product():
+    name = input("Название товара: ")
+    price = float(input("Цена: "))
+    show_categories()
+    cat_id = int(input("ID категории: "))
+    product = Product.create(name=name, price=price, category_id=cat_id)
+
+    tag_names = input("Введите теги через запятую: ").split(",")
+    for tag_name in tag_names:
+        tag, _ = Tag.get_or_create(name=tag_name.strip())
+        ProductTag.create(product=product, tag=tag)
+    print("Товар добавлен.")
+
+
+def delete_product():
+    show_products()
+    pid = int(input("ID товара для удаления: "))
+    ProductTag.delete().where(ProductTag.product == pid).execute()
+    Product.delete_by_id(pid)
+    print("Удалено.")
+
+
+def update_product():
+    show_products()
+    pid = int(input("ID товара для изменения: "))
+    product = Product.get_by_id(pid)
+
+    new_name = input(f"Новое имя ({product.name}), оставить пустым — без изменений: ")
+    if new_name:
+        product.name = new_name
+
+    new_price = input(
+        f"Новая цена ({product.price}), оставить пустым — без изменений: "
+    )
+    if new_price:
+        product.price = float(new_price)
+
+    new_tags = input("Новые теги (через запятую, оставить пустым — без изменений): ")
+    if new_tags:
+        # Удалить старые связи
+        ProductTag.delete().where(ProductTag.product == product).execute()
+
+        tag_names = [name.strip() for name in new_tags.split(",") if name.strip()]
+        for tag_name in tag_names:
+            tag, _ = Tag.get_or_create(name=tag_name)
+            ProductTag.create(product=product, tag=tag)
+
+    if input("Хотите изменить категорию? (y/n): ").lower() == "y":
+        show_categories()
+        new_cat = int(input(f"ID новой категории ({product.category_id.id}): "))
+        if new_cat:
+            try:
+                category = Category.get_by_id(int(new_cat))
+                product.category_id = category.id
+            except Category.DoesNotExist:
+                print("Категория с таким ID не найдена.")
+
+    product.save()
+    print("Товар изменён.")
+
+
+def menu():
+    while True:
+        print(
+            """
+1 - Вывести категории
+2 - Вывести товары
+3 - Добавить категорию
+4 - Добавить товар
+5 - Удалить товар
+6 - Изменить товар
+0 - Выйти
+"""
+        )
+        choice = input("Выбор: ")
+        if choice == "1":
+            show_categories()
+        elif choice == "2":
+            show_products()
+        elif choice == "3":
+            add_category()
+        elif choice == "4":
+            add_product()
+        elif choice == "5":
+            delete_product()
+        elif choice == "6":
+            update_product()
+        elif choice == "0":
+            break
+        else:
+            print("Неверный ввод.")
+
+
+if __name__ == "__main__":
+    db.connect()
+    menu()
+    db.close()
