@@ -2,11 +2,23 @@ from models import *
 from peewee import *
 
 
+def work_with_db(func):
+    def wrapper():
+        db.connect()
+        result = func()
+        db.close()
+        return result
+
+    return wrapper
+
+
+@work_with_db
 def show_categories():
     for c in Category.select():
         print(f"{c.id}: {c.name}")
 
 
+@work_with_db
 def show_products():
     for p in Product.select():
         tags = [t.tag.name for t in p.tag_links]
@@ -15,12 +27,14 @@ def show_products():
         )
 
 
+@work_with_db
 def add_category():
     name = input("Введите название категории: ")
     Category.create(name=name)
     print("Категория добавлена.")
 
 
+@work_with_db
 def add_product():
     name = input("Название товара: ")
     price = float(input("Цена: "))
@@ -35,6 +49,7 @@ def add_product():
     print("Товар добавлен.")
 
 
+@work_with_db
 def delete_product():
     show_products()
     pid = int(input("ID товара для удаления: "))
@@ -43,6 +58,7 @@ def delete_product():
     print("Удалено.")
 
 
+@work_with_db
 def update_product():
     show_products()
     pid = int(input("ID товара для изменения: "))
@@ -115,6 +131,4 @@ def menu():
 
 
 if __name__ == "__main__":
-    db.connect()
     menu()
-    db.close()
